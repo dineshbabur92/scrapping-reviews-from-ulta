@@ -41,7 +41,7 @@ except Exception as e:
     traceback.print_exc()
 
 products = list(db.products_copy.find({ "fetch_status": 0 }))
-products = products[0:2]
+#products = products[0:2]
 print("no of products not fetched, " + str(len(products)))
 
 client.close()
@@ -53,7 +53,7 @@ def scrap_product(product):
     try:
         client = pymongo.MongoClient("localhost", 27017)
         db = client.revlon
-        print("inserting into db, " + db.name)
+#        print("inserting into db, " + db.name)
     except Exception as e:
         client = None
         print("error connecting to mongodb, " + str(e))
@@ -102,7 +102,7 @@ def scrap_product(product):
         reviews_count = 0
         reviews = []
         mongo_reviews = []
-        while reviews_count<=150:
+        while reviews_count<=1:
 #            print("fetching reviews loop, waiting")
             time.sleep(3)
 #            print("idleness got over")
@@ -123,7 +123,7 @@ def scrap_product(product):
                 pass
 #                 next_page_element = None
 #                 review_elements = review_elements[0:1]
-            print("looping through reviews")
+#            print("looping through reviews")
             for i, review_element in enumerate(review_elements):
 #                print("fetching review no. " + str(i))
                 rating = headline = author_date = author_name = author_location = None
@@ -304,48 +304,48 @@ def scrap_product(product):
                 else:
                     break
 #             print("==================all reviews================\n" + json.dumps(reviews))
-            if product_json_file_writer is not None:
+        if product_json_file_writer is not None:
 #                 print("writing to json file writer --- " + json.dumps(reviews))
-                product_json_file_writer.write(json.dumps(reviews))
-            try:
-                reviews_inserts_result = db.reviews_copy.insert_many(mongo_reviews)
-                if(len(reviews_inserts_result.inserted_ids) == len(reviews)):
-                    log_msg += "\n" + ('all comments written successfully onto db' + "\n")
+            product_json_file_writer.write(json.dumps(reviews))
+        try:
+            reviews_inserts_result = db.reviews_copy.insert_many(mongo_reviews)
+            if(len(reviews_inserts_result.inserted_ids) == len(reviews)):
+                log_msg += "\n" + ('all comments written successfully onto db' + "\n")
 #                    print('all comments written successfully onto db')
-                    product_update_result = db.products_copy.update_one(
-                        { "_id": product["_id"] }, 
-                        { 
-                            "$set": { "fetch_status": 1 }, 
-                            "$currentDate": {"lastModified": True } 
-                        }
-                    )
-                    if(product_update_result.modified_count == 1):
-                        log_msg += "\n" + ("product status updated successfully" + "\n")
+                product_update_result = db.products_copy.update_one(
+                    { "_id": product["_id"] }, 
+                    { 
+                        "$set": { "fetch_status": 1 }, 
+                        "$currentDate": {"lastModified": True } 
+                    }
+                )
+                if(product_update_result.modified_count == 1):
+                    log_msg += "\n" + ("product status updated successfully" + "\n")
 #                        print("product status updated successfully")
-                    else:
-                        log_msg += "\n" + ("product status could not be updated" + "\n")
-#                        print("product status could not be updated")
                 else:
-                    log_msg += "\n" + ("reviews could not be written to db" + "\n")
-#                    print("reviews could not be written to db")
-                client.close()
-            except:
+                    log_msg += "\n" + ("product status could not be updated" + "\n")
+#                        print("product status could not be updated")
+            else:
                 log_msg += "\n" + ("reviews could not be written to db" + "\n")
+#                    print("reviews could not be written to db")
+            client.close()
+        except:
+            log_msg += "\n" + ("reviews could not be written to db" + "\n")
 #                print("reviews could not be written to db")
-            log_msg += "\n" + (
-                product["category_name"]
-                + "," + product["product_page"] 
-                + "," + str(product_name) 
-                + "," + str(reviews_count) 
-                + "\n"
-            )
-            log_msg += "\n" + ("--------------------------------------------------------------------------------------" + "\n")
-            print("reviews fetched for " + str(product["_id"]) + ", no.of reviews: " + str(len(reviews)))
+        log_msg += "\n" + (
+            product["category_name"]
+            + "," + product["product_page"] 
+            + "," + str(product_name) 
+            + "," + str(reviews_count) 
+            + "\n"
+        )
+        log_msg += "\n" + ("--------------------------------------------------------------------------------------" + "\n")      
     except TimeoutException:
         log_msg += "\n" + ("Could not sort by newest, timeout after 5 seconds" + "\n")
     global products_scraped
     products_scraped += 1
     print("total products scraped so far, " + str(products_scraped))
+    print("reviews fetched for " + str(product["_id"]) + ", no.of reviews: " + str(len(reviews)))
     if product_json_file_writer is not None:
         product_json_file_writer.close()
         product_json_file_writer = None
@@ -360,7 +360,7 @@ def scrap_product(product):
 
 print("atleast processing reached here?")
 try:
-    with ThreadPoolExecutor(10) as thread_pool:
+    with ThreadPoolExecutor(4) as thread_pool:
         futures = {thread_pool.submit(scrap_product, product) for product in products}
     for f in as_completed(futures):
         rs = f.result()

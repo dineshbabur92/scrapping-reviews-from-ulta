@@ -67,7 +67,7 @@ else:
 db.products.update_many({}, { "$set": { "fetch_status": 0 } })
 
 
-# In[ ]:
+# In[2]:
 
 import time
 import pymongo
@@ -100,7 +100,12 @@ except Exception as e:
     print("error connecting to mongodb, " + str(e))
     traceback.print_exc()
 
-categories = list(db.categories.find({ "fetch_status": 0 }))
+categories = list(db.categories.find({
+    "category_name": { 
+        "$nin": [ "m - makeup:face", "m - makeup:eyes", "m - makeup:lips" ]
+    },
+    "fetch_status": 0 
+}))
 print("no of categories not fetched, " + str(len(categories)))
 
 driver = webdriver.Firefox("D:\\Data\\Dinesh\\Work\\revlon\\geckodriver-v0.19.1-win64");
@@ -155,14 +160,14 @@ try:
             ).find_elements_by_xpath(".//*")
         )
         no_of_product_pages = int((driver.find_elements_by_css_selector(".upper-limit")[0]).text.split(" ")[1])
-#         no_of_product_pages = 2
+        no_of_product_pages = 1
         log_to_file_and_console("no of product pages, " + str(no_of_product_pages))
         products = []
         for page_index in range(0, no_of_product_pages):
             log_writer.write("visiting page " + str(page_index + 1) + "\n")
             listing_page = category["category_page"] + "&Ns=product.bestseller%7C1" + "&No=" + str(page_index * 48) + "&Nrpp=48"
             driver.get(listing_page)
-            product_elements = driver.find_elements_by_css_selector(".product")
+            product_elements = driver.find_elements_by_css_selector(".product")[0:20]
             hrefs = [ 
                 {
                     "category_name": category["category_name"],
