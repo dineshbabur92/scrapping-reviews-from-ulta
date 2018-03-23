@@ -24,37 +24,57 @@ driver = webdriver.Firefox("D:\\Data\\Dinesh\\Work\\revlon\\geckodriver-v0.19.1-
 driver.get("https://www.ulta.com")
 driver.implicitly_wait(10)
 
-db.categories.delete_many({})
+db.categories_ulta_other.delete_many({})
+traversed_links = []
 links = []
 # links = {}
 # links["face"] = []
 # links["eyes"] = []
 # links["lips"] = []
-list_elements = driver.find_elements_by_css_selector(".ch13-list-face a")
-for e in list_elements:
-    links.append({
-        "parent_category": "face",
-        "category_name": e.get_attribute("data-nav-description"), 
-        "category_page": e.get_attribute("href"),
-        "fetch_status": 0
-    })
-list_elements = driver.find_elements_by_css_selector(".ch13-list-eyes a")
-for e in list_elements:
-    links.append({
-        "parent_category": "eyes",
-        "category_name": e.get_attribute("data-nav-description"), 
-        "category_page": e.get_attribute("href"),
-        "fetch_status": 0
-    })
-list_elements = driver.find_elements_by_css_selector(".ch13-list-lips a")
-for e in list_elements:
-    links.append({
-        "parent_category": "lips",
-        "category_name": e.get_attribute("data-nav-description"), 
-        "category_page": e.get_attribute("href"),
-        "fetch_status": 0
-    })
-category_inserts_result = db.categories.insert_many(links)
+cats = [
+    "ch13-list-cleansers",
+    "ch13-list-moisturizers",
+    "ch13-list-treatment-serums",
+    "ch13-list-eyetreatments",
+    "ch13-list-suncare",
+
+    "ch13-list-shampoo-conditioner",
+    "ch13-list-treatment",
+    "ch13-list-haircolor",
+
+    "ch13-list-womensfragrance",
+    "ch13-list-mensfragrance",
+
+    "ch13-list-hairstyling-tools",
+    "ch13-list-skincaretools",
+    "ch13-list-hairremoval-tools",
+    "ch13-list-makeupbrushestools",
+    "ch13-list-hairbrushescombs"
+]
+
+for cat in cats:
+    print("fetching for category, " + str("-".join(cat.split("-")[2:])))
+    list_elements = driver.find_elements_by_css_selector("."+ cat + " a")
+    for e in list_elements:
+        print(e.get_attribute("data-nav-description"))
+        if e.get_attribute("href") not in traversed_links:
+            traversed_links.append(e.get_attribute("href"))
+            links.append({
+                "parent_category": "-".join(cat.split("-")[2:]),
+                "category_name": e.get_attribute("data-nav-description"), 
+                "category_page": e.get_attribute("href"),
+                "fetch_status": 0
+            })
+print(len(traversed_links))
+# list_elements = driver.find_elements_by_css_selector(".ch13-list-gelmanicure a")
+# for e in list_elements:
+#     links.append({
+#         "parent_category": "gelmanicure",
+#         "category_name": e.get_attribute("data-nav-description"), 
+#         "category_page": e.get_attribute("href"),
+#         "fetch_status": 0
+#     })
+category_inserts_result = db.categories_ulta_other.insert_many(links)
 if(len(category_inserts_result.inserted_ids) == len(links)):
     print("inserted successfully!")
 else:
@@ -67,7 +87,7 @@ else:
 db.products.update_many({}, { "$set": { "fetch_status": 0 } })
 
 
-# In[2]:
+# In[8]:
 
 import time
 import pymongo
@@ -84,7 +104,7 @@ import traceback
 
 
 RUN_TIMESTAMP = datetime.datetime.now().strftime('%m_%d_%Y_%H_%M_%S')
-DATA_FOLDER = 'D:\\Data\\Dinesh\\Work\\revlon\\ulta_data'
+DATA_FOLDER = 'D:\\Data\\Dinesh\\Work\\revlon\\ulta_data\\skin'
 
 if not os.path.exists(DATA_FOLDER + "\\files_by_category"):
     os.makedirs(DATA_FOLDER + "\\files_by_category")
@@ -100,12 +120,31 @@ except Exception as e:
     print("error connecting to mongodb, " + str(e))
     traceback.print_exc()
 
-categories = list(db.categories.find({
+
+
+db.products.update_many({}, { "$set": { "fetch_status": 0 } })
+
+
+categories = list(db.categories_ulta_other.find({
     "category_name": { 
-        "$nin": [ "m - makeup:face", "m - makeup:eyes", "m - makeup:lips" ]
+        "$nin": [
+            "m - skin care:cleansers",
+            "m - skin care:moisturizers",
+            "m - skin care:treatment & serums",
+            "m - skin care:eye treatments",
+            "m - bath & body:suncare",
+            "m - ulta collection:suncare",
+            "m - hair:shampoo & conditioner",
+            "m - hair:treatment",
+            "m - fragrance:women's fragrance",
+            "m - fragrance:men's fragrance",
+            "m - hair:hair styling tools",
+            "m - makeup:makeup brushes & tools"
+        ]
     },
     "fetch_status": 0 
 }))
+
 print("no of categories not fetched, " + str(len(categories)))
 
 driver = webdriver.Firefox("D:\\Data\\Dinesh\\Work\\revlon\\geckodriver-v0.19.1-win64");
@@ -160,30 +199,33 @@ try:
             ).find_elements_by_xpath(".//*")
         )
         no_of_product_pages = int((driver.find_elements_by_css_selector(".upper-limit")[0]).text.split(" ")[1])
-        no_of_product_pages = 1
+        no_of_product_pages = 2
         log_to_file_and_console("no of product pages, " + str(no_of_product_pages))
         products = []
         for page_index in range(0, no_of_product_pages):
             log_writer.write("visiting page " + str(page_index + 1) + "\n")
             listing_page = category["category_page"] + "&Ns=product.bestseller%7C1" + "&No=" + str(page_index * 48) + "&Nrpp=48"
             driver.get(listing_page)
-            product_elements = driver.find_elements_by_css_selector(".product")[0:20]
+            product_elements = driver.find_elements_by_css_selector(".product")
+            if page_index == 1:
+                products_elements = product_elements[0:2]
             hrefs = [ 
                 {
                     "category_name": category["category_name"],
                     "listing_page": listing_page,
                     "product_page": product_element.get_attribute("href"),
-                    "fetch_status": 0
+                    "fetch_status": 0,
+                    "batch_no": page_index % 5
                 }
                 for product_element in product_elements
             ]
             products.extend(hrefs)
             log_writer.write("no of products at page " + str(page_index + 1) + ", " + str(len(hrefs)) + "\n")
         log_to_file_and_console("total no of products, " + str(len(products)))
-        products_inserts_result = db.products.insert_many(products)
+        products_inserts_result = db.products_ulta_other.insert_many(products[0:50])
         if(len(products_inserts_result.inserted_ids) == len(products)):
             print("inserted successfully!")
-            category_update_result = db.categories.update_one(
+            category_update_result = db.categories_ulta_other.update_one(
                 {"_id": category["_id"] }, 
                 { 
                     "$set": { "fetch_status": 1 }, 

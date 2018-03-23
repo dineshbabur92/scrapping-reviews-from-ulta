@@ -19,7 +19,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 RUN_TIMESTAMP = datetime.datetime.now().strftime('%m_%d_%Y_%H_%M_%S')
-DATA_FOLDER = 'D:\\Data\\Dinesh\\Work\\revlon\\ulta_data\\parallel'
+DATA_FOLDER = 'D:\\Data\\Dinesh\\Work\\revlon\\ulta_data\\skin\\parallel'
 
 if not os.path.exists(DATA_FOLDER + "\\files_by_category"):
     os.makedirs(DATA_FOLDER + "\\files_by_category")
@@ -40,9 +40,19 @@ except Exception as e:
     print("error connecting to mongodb, " + str(e))
     traceback.print_exc()
 
-products = list(db.products_copy.find({ "fetch_status": 0 }))
+products = list(db.products_ulta_skin.find({ "fetch_status": 0 }))
 #products = products[0:2]
-print("no of products not fetched, " + str(len(products)))
+#products = [
+#    {
+#        "_id" : "5ab3497710f9516ab07e75ec", 
+#        "category_name" : "m - nails:top & base coats", 
+#        "listing_page" : "https://www.ulta.com/nails-top-base-coats?N=27iq&Ns=product.bestseller%7C1&No=0&Nrpp=48", 
+#        "product_page" : "https://www.ulta.com/gel-shine-top-coat?productId=xlsImpprod17741159", 
+#        "fetch_status" : 0, 
+#        "batch_no" : 0 
+#    }
+#]
+#print("no of products not fetched, " + str(len(products)))
 
 client.close()
 
@@ -56,7 +66,7 @@ def scrap_product(product):
 #        print("inserting into db, " + db.name)
     except Exception as e:
         client = None
-        print("error connecting to mongodb, " + str(e))
+#        print("error connecting to mongodb, " + str(e))
         traceback.print_exc()
     print("scraping product, " + str(product["_id"]))
     driver = webdriver.Firefox("D:\\Data\\Dinesh\\Work\\revlon\\geckodriver-v0.19.1-win64")
@@ -89,7 +99,10 @@ def scrap_product(product):
 #    print("getting page")
     driver.get(product["product_page"])
     product_name = driver.find_element_by_xpath("//h1[@itemprop='name']").text
-    driver.find_element_by_xpath("//select[@id='pr-sort-reviews']/option[text()='Newest']").click()
+    try:
+        driver.find_element_by_xpath("//select[@id='pr-sort-reviews']/option[text()='Newest']").click()
+    except:
+        pass
     try:
 #        print("web driver waiting after sorting by newest")
         WebDriverWait(driver, 5).until(
@@ -102,7 +115,7 @@ def scrap_product(product):
         reviews_count = 0
         reviews = []
         mongo_reviews = []
-        while reviews_count<=1:
+        while reviews_count<=150:
 #            print("fetching reviews loop, waiting")
             time.sleep(3)
 #            print("idleness got over")
@@ -282,37 +295,38 @@ def scrap_product(product):
 #                     + "\n"
 #                    )
                     pass
-                if(next_page_element):
-                    try:
-                        next_page_element.click()
+            if(next_page_element):
+                try:
+                    next_page_element.click()
 #                         time.sleep(5)
-                        try:
-                            WebDriverWait(driver, 5).until(
-                                lambda driver=driver: 
-                                    driver.execute_script(
-                                        "return document.readyState==='complete'"
-                                    )
-                            )
-                        except:
-                            log_msg += "\n" + ("could not go to next page, timeout after 5 secs" + "\n")
-#                            print("could not go to next page, timeout after 5 secs" + "\n")
-                            break
+                    try:
+                        WebDriverWait(driver, 5).until(
+                            lambda driver=driver: 
+                                driver.execute_script(
+                                    "return document.readyState==='complete'"
+                                )
+                        )
                     except:
-                        log_msg += "\n" + ("no next page" + "\n")
-#                        print("no next page" + "\n")
+                        log_msg += "\n" + ("could not go to next page, timeout after 5 secs" + "\n")
+#                            print("could not go to next page, timeout after 5 secs" + "\n")
                         break
-                else:
+                except:
+                    log_msg += "\n" + ("no next page" + "\n")
+#                    print("no next page" + "\n")
                     break
+            else:
+#                print("just breaking")
+                break
 #             print("==================all reviews================\n" + json.dumps(reviews))
         if product_json_file_writer is not None:
 #                 print("writing to json file writer --- " + json.dumps(reviews))
             product_json_file_writer.write(json.dumps(reviews))
         try:
-            reviews_inserts_result = db.reviews_copy.insert_many(mongo_reviews)
+            reviews_inserts_result = db.reviews_ulta_skin.insert_many(mongo_reviews)
             if(len(reviews_inserts_result.inserted_ids) == len(reviews)):
                 log_msg += "\n" + ('all comments written successfully onto db' + "\n")
 #                    print('all comments written successfully onto db')
-                product_update_result = db.products_copy.update_one(
+                product_update_result = db.products_ulta_skin.update_one(
                     { "_id": product["_id"] }, 
                     { 
                         "$set": { "fetch_status": 1 }, 
@@ -360,7 +374,7 @@ def scrap_product(product):
 
 print("atleast processing reached here?")
 try:
-    with ThreadPoolExecutor(4) as thread_pool:
+    with ThreadPoolExecutor(5) as thread_pool:
         futures = {thread_pool.submit(scrap_product, product) for product in products}
     for f in as_completed(futures):
         rs = f.result()
